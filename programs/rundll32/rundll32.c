@@ -195,11 +195,12 @@ static void *get_entry_point32( HMODULE module, LPCWSTR entry, BOOL *unicode )
     return ret;
 }
 
-static LPWSTR get_next_arg(LPWSTR *cmdline)
+static LPWSTR get_next_arg(LPWSTR *cmdline, BOOL can_have_commas)
 {
     LPWSTR s;
     LPWSTR arg,d;
     BOOL in_quotes;
+    BOOL is_separator;
     int bcount,len=0;
 
     /* count the chars */
@@ -207,7 +208,8 @@ static LPWSTR get_next_arg(LPWSTR *cmdline)
     in_quotes=FALSE;
     s=*cmdline;
     while (1) {
-        if (*s==0 || ((*s=='\t' || *s==' ') && !in_quotes)) {
+        is_separator = (*s=='\t' || *s==' ' || (*s==',' && !can_have_commas));
+        if (*s==0 || (is_separator && !in_quotes)) {
             /* end of this command line argument */
             break;
         } else if (*s=='\\') {
@@ -233,7 +235,8 @@ static LPWSTR get_next_arg(LPWSTR *cmdline)
     d=arg;
     s=*cmdline;
     while (*s) {
-        if ((*s=='\t' || *s==' ') && !in_quotes) {
+        is_separator = (*s=='\t' || *s==' ' || (*s==',' && !can_have_commas));
+        if (is_separator && !in_quotes) {
             /* end of this command line argument */
             break;
         } else if (*s=='\\') {
@@ -267,8 +270,9 @@ static LPWSTR get_next_arg(LPWSTR *cmdline)
     *d=0;
     *cmdline=s;
 
-    /* skip the remaining spaces */
-    while (**cmdline=='\t' || **cmdline==' ') {
+    /* skip the remaining spaces/commas */
+    while (**cmdline=='\t' || **cmdline==' ' ||
+            (**cmdline==',' && !can_have_commas)) {
         (*cmdline)++;
     }
 
@@ -343,14 +347,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE hOldInstance, LPWSTR szCmdLine
 
     /* Get the dll name and API EntryPoint */
     WINE_TRACE("CmdLine=%s\n",wine_dbgstr_w(szCmdLine));
-    szDllName = get_next_arg(&szCmdLine);
+    szDllName = get_next_arg(&szCmdLine, 0);
     if (!szDllName || *szDllName==0)
         goto CLEANUP;
     WINE_TRACE("DllName=%s\n",wine_dbgstr_w(szDllName));
-    if ((szEntryPoint = wcschr(szDllName, ',' )))
-        *szEntryPoint++=0;
-    else
-        szEntryPoint = get_next_arg(&szCmdLine);
+    szEntryPoint = get_next_arg(&szCmdLine, 1);
     WINE_TRACE("EntryPoint=%s\n",wine_dbgstr_w(szEntryPoint));
 
     /* Load the library */
